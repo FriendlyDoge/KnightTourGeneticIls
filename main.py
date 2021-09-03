@@ -2,6 +2,7 @@ import copy
 import random
 import math
 import time
+import xlsxwriter
 import concurrent.futures
 from datetime import timedelta
 
@@ -268,36 +269,91 @@ def algoritmo_genetico(tam_populacao, n_reproducoes, taxa_mutacao, qtd_genes_mut
 
 
 def passeio_cavalo(populacao: int, n_reproducoes: int, taxa_mutacao: int, qtd_genes_mutaveis: int,
-                   iteracoes: int, executar_local):
-    tempo_inicio = time.time()
-    try:
-        if populacao < taxa_mutacao:
-            raise ValueError("Mais individuos para fazer mutacao do que tem gente!")
-    except ValueError:
-        exit("Populacao menor que taxa de mutacao invalida exception")
+                   iteracoes: int, executar_local, worksheet, rodadas: int, bold_format, cell_format):
+    resposta_global = []
+    avaliacao_melhor = 0
+    soma_melhores = 0
+    tempo_inicio_global = time.time()
+    ini_x = "X" + str(inicial_x + 1)
+    ini_y = "Y" + str(inicial_y + 1)
+    pos_inicial = ini_x + ", " + ini_y
 
-    try:
-        if populacao < taxa_mutacao:
-            raise ValueError("Mais individuos para fazer mutacao do que tem gente!")
-    except ValueError:
-        exit("Populacao menor que taxa de mutacao invalida exception")
+    itrs_ils = 0
+    itrs_simulated = 0
+    vlr_temp = 0
+    if executar_local == 1:
+        itrs_ils = iteracoes_ils
+        itrs_simulated = iteracoes_simulated
+        vlr_temp = valor_temperatura
 
-    resposta, avaliacao = algoritmo_genetico(tam_populacao=populacao, n_reproducoes=n_reproducoes,
-                                             taxa_mutacao=taxa_mutacao, qtd_genes_mutaveis=qtd_genes_mutaveis,
-                                             iteracoes=iteracoes, executar_local=executar_local)
+    for rodada in range(rodadas):
+        print(str(rodada))
+        tempo_inicio = time.time()
+        try:
+            if populacao < taxa_mutacao:
+                raise ValueError("Mais individuos para fazer mutacao do que tem gente!")
+        except ValueError:
+            exit("Populacao menor que taxa de mutacao invalida exception")
 
-    print("Avaliacao final: " + str(avaliacao))
-    print(str(resposta))
-    tempo_fim = time.time()
-    duracao = tempo_fim - tempo_inicio
-    print("Duracao: " + str(timedelta(seconds=duracao)))
+        try:
+            if populacao < taxa_mutacao:
+                raise ValueError("Mais individuos para fazer mutacao do que tem gente!")
+        except ValueError:
+            exit("Populacao menor que taxa de mutacao invalida exception")
+
+        resposta, avaliacao = algoritmo_genetico(tam_populacao=populacao, n_reproducoes=n_reproducoes,
+                                                 taxa_mutacao=taxa_mutacao, qtd_genes_mutaveis=qtd_genes_mutaveis,
+                                                 iteracoes=iteracoes, executar_local=executar_local)
+        if avaliacao > avaliacao_melhor:
+            resposta_global = resposta
+            avaliacao_melhor = avaliacao
+
+        soma_melhores += avaliacao
+        print("Avaliacao final: " + str(avaliacao))
+        print(str(resposta))
+        tempo_fim = time.time()
+        duracao = tempo_fim - tempo_inicio
+        dur_delta = timedelta(seconds=duracao)
+        print("Duracao: " + str(dur_delta))
+        porcentagem_acertos_atual = avaliacao*100/avaliacao_maxima
+        linha_execucao = [str(populacao), str(n_reproducoes), str(taxa_mutacao), str(qtd_genes_mutaveis),
+                          str(iteracoes), pos_inicial, str(avaliacao), str(porcentagem_acertos_atual), str(rodada + 1),
+                          str(dur_delta), str(executar_local), str(itrs_ils), str(itrs_simulated), str(vlr_temp),
+                          str(resposta)]
+        worksheet.write_row(1 + rodada, 0, linha_execucao, cell_format)
+
+    tempo_fim_global = time.time()
+    duracao_global = str(timedelta(seconds=(tempo_fim_global - tempo_inicio_global)))
+
+    media_correta = soma_melhores/iteracoes
+    porcentagem_acerto = (media_correta*100/avaliacao_maxima)
+    resultado_final = [str(populacao), str(n_reproducoes), str(taxa_mutacao), str(qtd_genes_mutaveis), str(iteracoes),
+                       pos_inicial, str(media_correta), str(porcentagem_acerto), str(rodadas), duracao_global,
+                       str(executar_local), str(itrs_ils), str(itrs_simulated), str(vlr_temp), str(resposta_global)]
+
+    # header + rodadas + linha nova agora
+    worksheet.write_row(1 + rodadas + 2, 0, resultado_final, bold_format)
 
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    for i in range(10):
-        print("Rodada " + str(i))
-        passeio_cavalo(populacao=50, n_reproducoes=30, taxa_mutacao=15, qtd_genes_mutaveis=1,
-                       iteracoes=1000, executar_local=1)
-        # passeio_cavalo(populacao=300, n_reproducoes=285, taxa_mutacao=220, qtd_genes_mutaveis=1,
-        #               iteracoes=500, executar_local=1)
+
+    workbook = xlsxwriter.Workbook('C:/Users/frien/Documents/Cavalo.xlsx')
+    resultados_sheet = workbook.add_worksheet(name='Resultados Conjunto 1 sem local')
+
+    linha_header = ['Populacao', 'Numero Reproducoes', 'Taxa Mutacao', 'Genes Mutaveis', 'Iteracoes',
+                    'Posicao Inicial', 'Media Passos Corretos', '% Acerto', 'Teste', 'Tempo Testes',
+                    'Executou Ils', 'Iteracoes Ils', 'Iteracoes Simulated', 'Temperatura', 'Movimentos']
+
+    cell_format_bold = workbook.add_format({'bold': True})
+    cell_format_bold.set_align('center')
+    cell_format_bold.set_font('Times New Roman')
+    cell_format_bold.set_font_size(12)
+    cell_format_normal = workbook.add_format()
+    cell_format_normal.set_align('center')
+    cell_format_normal.set_font('Times New Roman')
+    cell_format_normal.set_font_size(12)
+    resultados_sheet.write_row(0, 0, linha_header, cell_format=cell_format_normal)
+    passeio_cavalo(populacao=50, n_reproducoes=30, taxa_mutacao=15, qtd_genes_mutaveis=1,
+                   iteracoes=10, executar_local=0, worksheet=resultados_sheet, rodadas=10, bold_format=cell_format_bold, cell_format=cell_format_normal)
+    workbook.close()
