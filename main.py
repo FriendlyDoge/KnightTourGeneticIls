@@ -3,14 +3,14 @@ import random
 import math
 import time
 import xlsxwriter
-import concurrent.futures
+from multiprocessing import Pool, cpu_count
 from datetime import timedelta
 
 tamanho_tabuleiro = 8
 inicial_x = 5
 inicial_y = 5
-iteracoes_simulated = 200  # 50
-iteracoes_ils = 1000  # 100
+iteracoes_simulated = 200  # 200
+iteracoes_ils = 1000  # 1000
 valor_temperatura = 0.1
 avaliacao_maxima = 64
 
@@ -220,6 +220,14 @@ def pega_melhor_avaliacao(populacao):
     return maior_valor, populacao[indice]
 
 
+def ils_paralelizado(populacao):
+    with Pool(cpu_count()) as p:
+        resultado_ils = p.map(executa_ils, populacao)
+        for indvs in range(len(populacao)):
+            novo_individuo = resultado_ils[indvs]
+            populacao[indvs] = novo_individuo
+
+
 def algoritmo_genetico(tam_populacao, n_reproducoes, taxa_mutacao, qtd_genes_mutaveis, iteracoes, executar_local):
     populacao = [cria_solucao_inicial() for i in range(tam_populacao)]
 
@@ -233,9 +241,6 @@ def algoritmo_genetico(tam_populacao, n_reproducoes, taxa_mutacao, qtd_genes_mut
             escolher_populacao(populacao, avalia_populacao(populacao), n_reproducoes)
         populacao = reproducoes(populacao_escolhida, avaliacao_escolhidos)
 
-        # for indivs in range(len(populacao_escolhida)):
-        #    populacao.remove(populacao_escolhida[indivs])
-
         maior_valor, individuo = pega_melhor_avaliacao(populacao)
         if maior_valor == avaliacao_maxima:
             maior_valor_global = maior_valor
@@ -244,14 +249,10 @@ def algoritmo_genetico(tam_populacao, n_reproducoes, taxa_mutacao, qtd_genes_mut
         if executar_local == 1 and (itrs + 1) % iteracoes/2 == 0:
             print("Começando ILS. Como estava antes: " + str(maior_valor_global) + " Tam_populacao: " + str(len(populacao)))
             populacao_local = []
-            if populacao.__contains__(melhor_individuo) == 0:  # Colocar o melhor individuo na populacao caso ele não esteja lá.
+            # Colocar o melhor individuo na populacao caso ele não esteja lá.
+            if populacao.__contains__(melhor_individuo) == 0:
                 populacao_local.append(copy.deepcopy(melhor_individuo))
-            with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
-                future_populaco = {executor.submit(executa_ils, populacao[index_indv]): index_indv for index_indv in
-                                   range(len(populacao))}
-                for future in concurrent.futures.as_completed(future_populaco):
-                    populacao_local.append(future.result())
-            populacao = populacao_local
+            ils_paralelizado(populacao)
 
         maior_valor, individuo = pega_melhor_avaliacao(populacao)
 
