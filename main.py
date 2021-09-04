@@ -6,11 +6,13 @@ import xlsxwriter
 from multiprocessing import Pool, cpu_count
 from datetime import timedelta
 
+# random.seed(111)
+
 tamanho_tabuleiro = 8
 inicial_x = 5
 inicial_y = 5
-iteracoes_simulated = 200  # 200
-iteracoes_ils = 1000  # 1000
+iteracoes_simulated = 100  # 200
+iteracoes_ils = 500  # 1000
 valor_temperatura = 0.1
 avaliacao_maxima = 64
 
@@ -39,7 +41,7 @@ def pega_posicao_pulo(x_atual: int, y_atual: int, movimento: int):
     elif movimento == 6:
         x_destino = x_atual - 2
         y_destino = y_atual + 1
-    elif movimento == 2:
+    elif movimento == 7:
         x_destino = x_atual - 1
         y_destino = y_atual + 2
     return x_destino, y_destino
@@ -61,15 +63,21 @@ def posicao_valida(x: int, y: int, matriz_avaliacao):
 def avalia_solucao(solucao: []):
     x = inicial_x
     y = inicial_y
-    resultado_avaliacao = 0
+    resultado_avaliacao = 1
     matriz_avaliacao = [[0 for x in range(tamanho_tabuleiro)] for y in range(tamanho_tabuleiro)]
+    matriz_avaliacao[x][y] = 1
     for index in range(len(solucao)):
         x_destino, y_destino = pega_posicao_pulo(x, y, solucao[index])
-        if posicao_valida(x_destino, y_destino, matriz_avaliacao):
+        if (posicao_valida(x_destino, y_destino, matriz_avaliacao)) or (x_destino == inicial_x and y_destino == inicial_y and index == (avaliacao_maxima - 1)):
+            print("x inicial: " + str(x) + ", y inicial: " + str(y))
+            print("x final: " + str(x_destino) + ", y final: " + str(y_destino))
+            print("Movimento: " + str(solucao[index]))
             resultado_avaliacao = resultado_avaliacao + 1
             x = x_destino
             y = y_destino
             matriz_avaliacao[x][y] = matriz_avaliacao[x][y] + 1
+        else:
+            print("inválido!")
     return resultado_avaliacao
 
 
@@ -244,9 +252,12 @@ def algoritmo_genetico(tam_populacao, n_reproducoes, taxa_mutacao, qtd_genes_mut
         maior_valor, individuo = pega_melhor_avaliacao(populacao)
         if maior_valor == avaliacao_maxima:
             maior_valor_global = maior_valor
-            melhor_individuo = individuo
+            melhor_individuo = copy.deepcopy(individuo)
             break
-        if executar_local == 1 and (itrs + 1) % iteracoes/2 == 0:
+        elif maior_valor > maior_valor_global:
+            melhor_individuo = copy.deepcopy(individuo)
+            maior_valor_global = maior_valor
+        if executar_local == 1 and (itrs + 1) == iteracoes/2:  # Executa ILS na metade do caminho
             print("Começando ILS. Como estava antes: " + str(maior_valor_global) + " Tam_populacao: " + str(len(populacao)))
             populacao_local = []
             # Colocar o melhor individuo na populacao caso ele não esteja lá.
@@ -258,15 +269,49 @@ def algoritmo_genetico(tam_populacao, n_reproducoes, taxa_mutacao, qtd_genes_mut
 
         if maior_valor == avaliacao_maxima:
             maior_valor_global = maior_valor
-            melhor_individuo = individuo
+            melhor_individuo = copy.deepcopy(individuo)
             break
-        elif maior_valor_global < maior_valor:
+        elif maior_valor > maior_valor_global:
             maior_valor_global = maior_valor
             melhor_individuo = copy.deepcopy(individuo)
-        if (itrs + 1) % iteracoes/2 == 0:
-            print("Iteracoes: " + str(itrs + 1) + " . Melhor atual: " + str(maior_valor_global))
+            print("Melhoria com ILS! foi para " + str(maior_valor_global))
+        if (itrs + 1) % 100 == 0:
+            print(str(itrs))
+
+    if executar_local == 1:  # Executa ILS no final
+        print("Começando ILS. Como estava antes: " + str(maior_valor_global) + " Tam_populacao: " + str(len(populacao)))
+        populacao_local = []
+        # Colocar o melhor individuo na populacao caso ele não esteja lá.
+        if populacao.__contains__(melhor_individuo) == 0:
+            populacao_local.append(copy.deepcopy(melhor_individuo))
+        ils_paralelizado(populacao)
+        maior_valor, individuo = pega_melhor_avaliacao(populacao)
+        if maior_valor > maior_valor_global:
+            maior_valor_global = maior_valor
+            melhor_individuo = copy.deepcopy(individuo)
+            print("Melhoria com ILS! foi para " + str(maior_valor_global))
 
     return melhor_individuo, maior_valor_global
+
+
+def tabuleiro_final(resposta):
+    print("Melhor resposta: " + str(avalia_solucao(resposta)))
+    print(resposta)
+    print("Tabuleiro:")
+    matriz_avaliacao = [[0 for x in range(tamanho_tabuleiro)] for y in range(tamanho_tabuleiro)]
+    x = inicial_x
+    y = inicial_y
+    matriz_avaliacao[x][y] = -1000
+    for r in range(len(resposta)):
+        x_mov, y_mov = pega_posicao_pulo(x, y, resposta[r])
+        if posicao_valida(x_mov, y_mov, matriz_avaliacao):
+            x = x_mov
+            y = y_mov
+            matriz_avaliacao[x][y] = matriz_avaliacao[x][y] + r + 1
+
+    for pos in range(tamanho_tabuleiro):
+        print(matriz_avaliacao[pos])
+    return matriz_avaliacao
 
 
 def passeio_cavalo(populacao: int, n_reproducoes: int, taxa_mutacao: int, qtd_genes_mutaveis: int,
@@ -290,23 +335,13 @@ def passeio_cavalo(populacao: int, n_reproducoes: int, taxa_mutacao: int, qtd_ge
     for rodada in range(rodadas):
         print(str(rodada))
         tempo_inicio = time.time()
-        try:
-            if populacao < taxa_mutacao:
-                raise ValueError("Mais individuos para fazer mutacao do que tem gente!")
-        except ValueError:
-            exit("Populacao menor que taxa de mutacao invalida exception")
-
-        try:
-            if populacao < taxa_mutacao:
-                raise ValueError("Mais individuos para fazer mutacao do que tem gente!")
-        except ValueError:
-            exit("Populacao menor que taxa de mutacao invalida exception")
 
         resposta, avaliacao = algoritmo_genetico(tam_populacao=populacao, n_reproducoes=n_reproducoes,
                                                  taxa_mutacao=taxa_mutacao, qtd_genes_mutaveis=qtd_genes_mutaveis,
                                                  iteracoes=iteracoes, executar_local=executar_local)
         if avaliacao > avaliacao_melhor:
-            resposta_global = resposta
+            # resposta_global = copy.deepcopy(resposta)
+            resposta_global = copy.deepcopy(resposta)
             avaliacao_melhor = avaliacao
 
         soma_melhores += avaliacao
@@ -335,12 +370,42 @@ def passeio_cavalo(populacao: int, n_reproducoes: int, taxa_mutacao: int, qtd_ge
     # header + rodadas + linha nova agora
     worksheet.write_row(1 + rodadas + 2, 0, resultado_final, bold_format)
 
+    # Desenha o tabuleiro
+    offset_x = 1 + rodadas + 4
+
+    for y in range(tamanho_tabuleiro):
+        worksheet.write_row(offset_x + y, 0, str(y + 1), bold_format)
+
+    tabuleiro = tabuleiro_final(resposta_global)
+
+    for x in range(tamanho_tabuleiro):
+        for y in range(tamanho_tabuleiro):
+            t = str(tabuleiro[y][x])
+            worksheet.write(offset_x + y, x + 2, t, bold_format)
+
+    worksheet.write(offset_x + 9, 2, "A", bold_format)
+    worksheet.write(offset_x + 9, 3, "B", bold_format)
+    worksheet.write(offset_x + 9, 4, "C", bold_format)
+    worksheet.write(offset_x + 9, 5, "D", bold_format)
+    worksheet.write(offset_x + 9, 6, "E", bold_format)
+    worksheet.write(offset_x + 9, 7, "F", bold_format)
+    worksheet.write(offset_x + 9, 8, "G", bold_format)
+    worksheet.write(offset_x + 9, 9, "H", bold_format)
+
+    for y in range(tamanho_tabuleiro):
+        worksheet.write(offset_x + 10, y + 2, str(y + 1), bold_format)
+
+    #for x in range(tamanho_tabuleiro):
+    #    worksheet.write_row(offset_x + tamanho_tabuleiro + x + 2, 2 + x, str(x + 1), bold_format)
+
+
+
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
 
-    workbook = xlsxwriter.Workbook('C:/Users/frien/Documents/Cavalo.xlsx')
-    resultados_sheet = workbook.add_worksheet(name='Resultados Conjunto 1 sem local')
+    workbook = xlsxwriter.Workbook('C:/Users/frien/Documents/Cavalo Conjunto 1 sem local.xlsx')
+    resultados_sheet = workbook.add_worksheet(name='Resultados')
 
     linha_header = ['Populacao', 'Numero Reproducoes', 'Taxa Mutacao', 'Genes Mutaveis', 'Iteracoes',
                     'Posicao Inicial', 'Media Passos Corretos', '% Acerto', 'Teste', 'Tempo Testes',
@@ -356,5 +421,5 @@ if __name__ == '__main__':
     cell_format_normal.set_font_size(12)
     resultados_sheet.write_row(0, 0, linha_header, cell_format=cell_format_normal)
     passeio_cavalo(populacao=50, n_reproducoes=30, taxa_mutacao=15, qtd_genes_mutaveis=1,
-                   iteracoes=10, executar_local=0, worksheet=resultados_sheet, rodadas=10, bold_format=cell_format_bold, cell_format=cell_format_normal)
+                   iteracoes=1, executar_local=0, worksheet=resultados_sheet, rodadas=1, bold_format=cell_format_bold, cell_format=cell_format_normal)
     workbook.close()
