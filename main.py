@@ -9,8 +9,8 @@ from datetime import timedelta
 # random.seed(111)
 
 tamanho_tabuleiro = 8
-inicial_x = 5
-inicial_y = 5
+inicial_x = 3
+inicial_y = 3
 iteracoes_simulated = 100  # 200
 iteracoes_ils = 500  # 1000
 valor_temperatura = 0.1
@@ -69,15 +69,10 @@ def avalia_solucao(solucao: []):
     for index in range(len(solucao)):
         x_destino, y_destino = pega_posicao_pulo(x, y, solucao[index])
         if (posicao_valida(x_destino, y_destino, matriz_avaliacao)) or (x_destino == inicial_x and y_destino == inicial_y and index == (avaliacao_maxima - 1)):
-            print("x inicial: " + str(x) + ", y inicial: " + str(y))
-            print("x final: " + str(x_destino) + ", y final: " + str(y_destino))
-            print("Movimento: " + str(solucao[index]))
             resultado_avaliacao = resultado_avaliacao + 1
             x = x_destino
             y = y_destino
             matriz_avaliacao[x][y] = matriz_avaliacao[x][y] + 1
-        else:
-            print("inválido!")
     return resultado_avaliacao
 
 
@@ -361,11 +356,22 @@ def passeio_cavalo(populacao: int, n_reproducoes: int, taxa_mutacao: int, qtd_ge
     tempo_fim_global = time.time()
     duracao_global = str(timedelta(seconds=(tempo_fim_global - tempo_inicio_global)))
 
-    media_correta = soma_melhores/iteracoes
+    media_correta = soma_melhores/rodadas
     porcentagem_acerto = (media_correta*100/avaliacao_maxima)
+
+    txt_exc_local = "Não"
+    if executar_local == 1:
+        txt_exc_local = "Sim"
+
     resultado_final = [str(populacao), str(n_reproducoes), str(taxa_mutacao), str(qtd_genes_mutaveis), str(iteracoes),
                        pos_inicial, str(media_correta), str(porcentagem_acerto), str(rodadas), duracao_global,
-                       str(executar_local), str(itrs_ils), str(itrs_simulated), str(vlr_temp), str(resposta_global)]
+                       txt_exc_local, str(itrs_ils), str(itrs_simulated), str(vlr_temp), str(resposta_global)]
+
+    linha_header_media = ['Populacao', 'Numero Reproducoes', 'Taxa Mutacao', 'Genes Mutaveis', 'Iteracoes',
+                          'Posicao Inicial', 'Media Passos Corretos', '% Acerto', 'Total de Execuções', 'Tempo Total',
+                          'Executou Ils', 'Iteracoes Ils', 'Iteracoes Simulated', 'Temperatura', 'Movimentos da melhor solução']
+
+    worksheet.write_row(1 + rodadas + 1, 0, linha_header_media, bold_format)
 
     # header + rodadas + linha nova agora
     worksheet.write_row(1 + rodadas + 2, 0, resultado_final, bold_format)
@@ -404,11 +410,11 @@ def passeio_cavalo(populacao: int, n_reproducoes: int, taxa_mutacao: int, qtd_ge
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
 
-    workbook = xlsxwriter.Workbook('C:/Users/frien/Documents/Cavalo Conjunto 1 sem local.xlsx')
+    workbook = xlsxwriter.Workbook('C:/Users/frien/Documents/Cavalo Conjunto 1 SEM local.xlsx')
     resultados_sheet = workbook.add_worksheet(name='Resultados')
 
     linha_header = ['Populacao', 'Numero Reproducoes', 'Taxa Mutacao', 'Genes Mutaveis', 'Iteracoes',
-                    'Posicao Inicial', 'Media Passos Corretos', '% Acerto', 'Teste', 'Tempo Testes',
+                    'Posicao Inicial', 'Passos Corretos', '% Acerto', 'Teste', 'Tempo Testes',
                     'Executou Ils', 'Iteracoes Ils', 'Iteracoes Simulated', 'Temperatura', 'Movimentos']
 
     cell_format_bold = workbook.add_format({'bold': True})
@@ -420,6 +426,6 @@ if __name__ == '__main__':
     cell_format_normal.set_font('Times New Roman')
     cell_format_normal.set_font_size(12)
     resultados_sheet.write_row(0, 0, linha_header, cell_format=cell_format_normal)
-    passeio_cavalo(populacao=50, n_reproducoes=30, taxa_mutacao=15, qtd_genes_mutaveis=1,
-                   iteracoes=1, executar_local=0, worksheet=resultados_sheet, rodadas=1, bold_format=cell_format_bold, cell_format=cell_format_normal)
+    passeio_cavalo(populacao=300, n_reproducoes=285, taxa_mutacao=20, qtd_genes_mutaveis=1,
+                   iteracoes=1000, executar_local=1, worksheet=resultados_sheet, rodadas=10, bold_format=cell_format_bold, cell_format=cell_format_normal)
     workbook.close()
