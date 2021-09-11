@@ -9,12 +9,13 @@ from datetime import timedelta
 # random.seed(111)
 
 tamanho_tabuleiro = 8
-inicial_x = 3
-inicial_y = 3
+inicial_x = 2
+inicial_y = 2
 iteracoes_simulated = 100  # 200
 iteracoes_ils = 500  # 1000
 valor_temperatura = 0.1
 avaliacao_maxima = 64
+executar_ils_meio = False
 
 
 def pega_posicao_pulo(x_atual: int, y_atual: int, movimento: int):
@@ -123,7 +124,6 @@ def perturbacao(resposta_atual: [], avaliacao):
 
 def executa_ils(resposta_atual: []):
     melhor_global = copy.deepcopy(resposta_atual)
-    melhor_global = simulated_annealing(melhor_global)
     avaliacao_global = avalia_solucao(melhor_global)
     iteracoes = 0
     while iteracoes < iteracoes_ils:
@@ -174,7 +174,6 @@ def escolher_populacao(populacao_atual, avaliacoes, n_reproducoes):
     return populacao, avaliacoes_escolhidas
 
 
-# https://stackoverflow.com/questions/10324015/fitness-proportionate-selection-roulette-wheel-selection-in-python
 def weighted_random_choice(populacao, choices):
     max_val = sum(choices.values())
     pick = random.uniform(0, max_val)
@@ -224,7 +223,7 @@ def pega_melhor_avaliacao(populacao):
 
 
 def ils_paralelizado(populacao):
-    with Pool(cpu_count()) as p:
+    with Pool(6) as p:
         resultado_ils = p.map(executa_ils, populacao)
         for indvs in range(len(populacao)):
             novo_individuo = resultado_ils[indvs]
@@ -252,13 +251,16 @@ def algoritmo_genetico(tam_populacao, n_reproducoes, taxa_mutacao, qtd_genes_mut
         elif maior_valor > maior_valor_global:
             melhor_individuo = copy.deepcopy(individuo)
             maior_valor_global = maior_valor
-        if executar_local == 1 and (itrs + 1) == iteracoes/2:  # Executa ILS na metade do caminho
-            print("Começando ILS. Como estava antes: " + str(maior_valor_global) + " Tam_populacao: " + str(len(populacao)))
-            populacao_local = []
-            # Colocar o melhor individuo na populacao caso ele não esteja lá.
-            if populacao.__contains__(melhor_individuo) == 0:
-                populacao_local.append(copy.deepcopy(melhor_individuo))
-            ils_paralelizado(populacao)
+        if (itrs + 1) == iteracoes/2:
+            if executar_ils_meio and executar_local == 1:  # Executa ILS na metade do caminho
+                print("Começando ILS. Como estava antes: " + str(maior_valor_global) + " Tam_populacao: " + str(len(populacao)))
+                populacao_local = []
+                # Colocar o melhor individuo na populacao caso ele não esteja lá.
+                if populacao.__contains__(melhor_individuo) == 0:
+                    populacao_local.append(copy.deepcopy(melhor_individuo))
+                ils_paralelizado(populacao)
+            elif not executar_ils_meio:
+                print("Pulando ILS no meio")
 
         maior_valor, individuo = pega_melhor_avaliacao(populacao)
 
@@ -271,7 +273,7 @@ def algoritmo_genetico(tam_populacao, n_reproducoes, taxa_mutacao, qtd_genes_mut
             melhor_individuo = copy.deepcopy(individuo)
             print("Melhoria com ILS! foi para " + str(maior_valor_global))
         if (itrs + 1) % 100 == 0:
-            print(str(itrs))
+            print(str(itrs + 1))
 
     if executar_local == 1:  # Executa ILS no final
         print("Começando ILS. Como estava antes: " + str(maior_valor_global) + " Tam_populacao: " + str(len(populacao)))
@@ -304,6 +306,7 @@ def tabuleiro_final(resposta):
             y = y_mov
             matriz_avaliacao[x][y] = matriz_avaliacao[x][y] + r + 1
 
+    matriz_avaliacao[inicial_x][inicial_y] = "I"
     for pos in range(tamanho_tabuleiro):
         print(matriz_avaliacao[pos])
     return matriz_avaliacao
@@ -328,14 +331,13 @@ def passeio_cavalo(populacao: int, n_reproducoes: int, taxa_mutacao: int, qtd_ge
         vlr_temp = valor_temperatura
 
     for rodada in range(rodadas):
-        print(str(rodada))
+        print(str(rodada + 1))
         tempo_inicio = time.time()
 
         resposta, avaliacao = algoritmo_genetico(tam_populacao=populacao, n_reproducoes=n_reproducoes,
                                                  taxa_mutacao=taxa_mutacao, qtd_genes_mutaveis=qtd_genes_mutaveis,
                                                  iteracoes=iteracoes, executar_local=executar_local)
         if avaliacao > avaliacao_melhor:
-            # resposta_global = copy.deepcopy(resposta)
             resposta_global = copy.deepcopy(resposta)
             avaliacao_melhor = avaliacao
 
@@ -368,7 +370,7 @@ def passeio_cavalo(populacao: int, n_reproducoes: int, taxa_mutacao: int, qtd_ge
                        txt_exc_local, str(itrs_ils), str(itrs_simulated), str(vlr_temp), str(resposta_global)]
 
     linha_header_media = ['Populacao', 'Numero Reproducoes', 'Taxa Mutacao', 'Genes Mutaveis', 'Iteracoes',
-                          'Posicao Inicial', 'Media Passos Corretos', '% Acerto', 'Total de Execuções', 'Tempo Total',
+                          'Posicao Inicial', 'Media Passos Corretos', '% Acerto Média', 'Total de Execuções', 'Tempo Total',
                           'Executou Ils', 'Iteracoes Ils', 'Iteracoes Simulated', 'Temperatura', 'Movimentos da melhor solução']
 
     worksheet.write_row(1 + rodadas + 1, 0, linha_header_media, bold_format)
@@ -401,16 +403,11 @@ def passeio_cavalo(populacao: int, n_reproducoes: int, taxa_mutacao: int, qtd_ge
     for y in range(tamanho_tabuleiro):
         worksheet.write(offset_x + 10, y + 2, str(y + 1), bold_format)
 
-    #for x in range(tamanho_tabuleiro):
-    #    worksheet.write_row(offset_x + tamanho_tabuleiro + x + 2, 2 + x, str(x + 1), bold_format)
-
-
-
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
 
-    workbook = xlsxwriter.Workbook('C:/Users/frien/Documents/Cavalo Conjunto 1 SEM local.xlsx')
+    workbook = xlsxwriter.Workbook('C:/Users/frien/Documents/Cavalo Conjunto 2 SEM LOCAL.xlsx')
     resultados_sheet = workbook.add_worksheet(name='Resultados')
 
     linha_header = ['Populacao', 'Numero Reproducoes', 'Taxa Mutacao', 'Genes Mutaveis', 'Iteracoes',
@@ -426,6 +423,6 @@ if __name__ == '__main__':
     cell_format_normal.set_font('Times New Roman')
     cell_format_normal.set_font_size(12)
     resultados_sheet.write_row(0, 0, linha_header, cell_format=cell_format_normal)
-    passeio_cavalo(populacao=300, n_reproducoes=285, taxa_mutacao=20, qtd_genes_mutaveis=1,
+    passeio_cavalo(populacao=200, n_reproducoes=180, taxa_mutacao=100, qtd_genes_mutaveis=1,
                    iteracoes=1000, executar_local=1, worksheet=resultados_sheet, rodadas=10, bold_format=cell_format_bold, cell_format=cell_format_normal)
     workbook.close()
